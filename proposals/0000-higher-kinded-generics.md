@@ -32,9 +32,6 @@ proposed change.
 
 ## Motivation
 
-  ** @ryanglscott, At ICFP you mentioned you had found a usecase from within GHC;
-  could you send me some more information? **
-
   The usage of generic programming within the Haskell community is ubiquitous.
 We see a number of libraries relying on `GHC.Generics` to provide functionality
 generically. The choice of relying on `GHC.Generics` is natural: it comes with
