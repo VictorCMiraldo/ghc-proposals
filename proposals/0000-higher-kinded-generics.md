@@ -16,14 +16,14 @@ the link, and delete this bold sentence.**
 enables the programmer to access generic representations of higher kinded
 types and GADTs in a uniform fashion. This lifts the restriction to
 types of kind `*` and `* -> *` imposed by `GHC.Generics`. The `kind-generics` library
-does that by extendind the `GHC.Generics` language with a `Field`, `(:=>:)` and `Exists`,
+does that by extending the `GHC.Generics` language with a `Field`, `(:=>:)` and `Exists`,
 together with a new typeclass `GenericK`.
 
   This documents proposes to bring some of the functionality of `kind-generics`
 into `GHC.Generics`, thus enabling a programmer to access a bigger universe of
 generics by default.
-  
-  
+
+
   (builds [Haskell2018](https://victorcmiraldo.github.io/data/hask2018_draft.pdf),
 
 Here you should write a short abstract motivating and briefly summarizing the
@@ -32,15 +32,35 @@ proposed change.
 
 ## Motivation
 
-  ** @ryanglscott, At ICFP you mentioned you had found a usecase from within GHC;
-  could you send me some more information? **
-
   The usage of generic programming within the Haskell community is ubiquitous.
 We see a number of libraries relying on `GHC.Generics` to provide functionality
 generically. The choice of relying on `GHC.Generics` is natural: it comes with
 `base`, and hence requires no extra package. Moreover, there is compiler support
-for deriving `Generic`. Unfortunately, however, this seamless interaction breaks
-down when the programmer is using more involved datatypes.
+for deriving `Generic`.
+
+  Unfortunately, this all breaks down when a programmer needs to
+use more involved datatypes. One example can be found in the source code of
+GHC itself. The `GHCi.Message` module defines a GADT named
+[`THMessage`](https://gitlab.haskell.org/ghc/ghc/blob/241921a0c238a047326b0c0f599f1c24222ff66c/libraries/ghci/GHCi/Message.hs#L236-268)
+that has 23 constructors. When GHC needs to serialize a `THMessage` to bytes,
+it does so with the
+[`putTHMessage`](https://gitlab.haskell.org/ghc/ghc/blob/241921a0c238a047326b0c0f599f1c24222ff66c/libraries/ghci/GHCi/Message.hs#L303-327)
+function:
+
+```haskell
+putTHMessage :: THMessage a -> Put
+putTHMessage m = case m of
+  NewName a                   -> putWord8 0  >> put a
+  Report a b                  -> putWord8 1  >> put a >> put b
+  ...
+  ReifyType a                 -> putWord8 22 >> put a
+```
+
+  This is a horribly tedious function to write, and to make things worse, it
+must be updated every time `THMessage` changes. (Which is often!) The
+implementation of `putTHMessage` is so predictable that it is practically
+begging to be written with a `GHC.Generics`-based solution instead. Alas, this
+is not currently possible, as `GHC.Generics` does not support GADTs.
 
   By extending the language of `GHC.Generics` with the combinators seen in
 `kind-generics`, we would be able to provide this seamless interaction of libraries
@@ -67,27 +87,27 @@ data WTExp :: * -> * where
   The generic representation will look something like:
 
 ```haskell
-type RepK WTExp 
+type RepK WTExp
   =   Field Var0
   :+: ((Kon Num :@: Var0) :=>: Field (Kon WTExp :@: Var0)
                            :*: Field (Kon WTExp :@: Var0))
-  :+: Exists (*) ((Kon Ord :@: Var0) :=>: 
+  :+: Exists (*) ((Kon Ord :@: Var0) :=>:
                   (Kon (~) :@: Var1 :@: Bool) :=>: Field (Kon Ordering)
                                                :*: Field (Kon WTExp :@: Var0)
                                                :*: Field (Kon WTExp :@: Var0))
-  :+: ( Field (Kon WTExp :@: Bool) 
+  :+: ( Field (Kon WTExp :@: Bool)
     :*: Field (Kon WTExp :@: Var0)
     :*: Field (Kon WTExp :@: Var0))
 ```
 
   ** TODO: The example above might be too complex... **
-                                             
+
 ## Proposed Change Specification
 
 We propose to bring in the [`GenericK`](https://hackage.haskell.org/package/kind-generics-0.4.0.0/docs/src/Generics.Kind.html#GenericK) typeclass and its direct dependencies
 into `GHC.Generics`. These dependencies are:
 
-* [`Data.PolyKinded.LoT`](https://hackage.haskell.org/package/kind-apply-0.3.2.0/docs/Data-PolyKinded.html#t:LoT) 
+* [`Data.PolyKinded.LoT`](https://hackage.haskell.org/package/kind-apply-0.3.2.0/docs/Data-PolyKinded.html#t:LoT)
 * [`Data.PolyKinded.(:@@:)`](https://hackage.haskell.org/package/kind-apply-0.3.2.0/docs/Data-PolyKinded.html#t::-64--64-:)
 * [`Data.PolyKinded.Atom.Atom`](https://hackage.haskell.org/package/kind-apply-0.3.2.0/docs/Data-PolyKinded-Atom.html#t:Atom)
 * [`Data.PolyKinded.Atom.Interpret`](https://hackage.haskell.org/package/kind-apply-0.3.2.0/docs/Data-PolyKinded-Atom.html#t:Interpret)
