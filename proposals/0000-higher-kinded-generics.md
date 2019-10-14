@@ -111,8 +111,118 @@ thing is to do with the proposal.
 
 ## Effect and Interactions
 
-  This proposal is backwards compatible with `GHC.Generics` and would not
-break code that already relies on it.
+  In this section we describe the features that `kind-generics` can and cannot handle.
+
+### Features that `kind-generics` can handle that `GHC.Generics` cannot.
+
+* Classes that have kinds besides `Type -> Constraint` or `(k -> Type) -> Constraint`.
+  Caveat: not all kinds can be represented. See the sections below for more.
+
+* Constructors with existentially quantified type variables, as in
+  `data Foo = forall a. MkFoo a` 
+  (or, equivalently, `data Foo where MkFoo :: a -> Foo`).  
+  Caveat: certain limitations are placed on what
+  the kinds of existentially quantified type variables can be. See the
+  sections below for more.
+ 
+* Constructors with existential contexts, as in `data Foo a = Show a => MkFoo` 
+  (or, equivalently, `data Foo a where MkFoo :: Show a => Foo`).  
+  Caveat: quantified constraints cannot be represented. See
+  the section below for more details.
+   
+* Constructors with rank-n types, as in `data Foo = MkFoo (forall a. a
+  -> a)`.  Caveat: due to GHC's inability to bind type variables in
+  lambda expressions, manipulating the representation types for rank-n
+  type variables is somewhat awkward at present. Possible, but
+  awkward. Implementing [this GHC
+  proposal](https://github.com/ghc-proposals/ghc-proposals/blob/master/proposals/0155-type-lambda.rst)
+  would make things less awkward.
+
+### Things that `kind-generics` cannot handle at all 
+
+Attempting to derive GenericK for any data types with these properties will result in an error:
+
+* Any data type with a kind that does not end with Type. One consequence is that 
+  [unlifted newtypes](https://github.com/ghc-proposals/ghc-proposals/blob/master/proposals/0098-unlifted-newtypes.rst) 
+  are not representable.
+
+* Any field types with a kind besides Type. This would rule out a data type like `data BoxedInt = BoxedInt Int#`.    
+
+* Field types that feature a type family applied to an existentially quantified or 
+  rank-n type variable, as in the following examples:
+```haskell
+type family F a
+
+data T1 where
+  MkT1 :: a -> F a -> T1
+
+data T2 = MkT2 (forall a. a -> F a)
+```
+
+
+    This is an artifact of the way kind-generics decomposes all
+    applications of types in representation types. Because type
+    families must be saturated with a certain number of arguments in
+    order to be a well formed type, decomposing type family
+    applications is generally not possible. Implementing [this GHC](https://github.com/ghc-proposals/ghc-proposals/pull/242)
+    proposal may make it possible to lift this restriction.
+    
+* Constructors that contain quantified constraints, such as in data
+    Foo where `MkFoo :: (forall a. C a) => Foo`.
+
+    This ultimately comes down to technical limitations of GHC itself, as various 
+    bugs (such as [this one](https://gitlab.haskell.org/ghc/ghc/issues/16365) 
+    and [this one](https://gitlab.haskell.org/ghc/ghc/issues/17333)) make 
+    it impractical to represent quantified constraints.
+    
+* Existentially quantified type variables whose kinds mention other 
+  existentially quantified type variables, such as in 
+  `data Foo where MkFoo :: forall k (a :: k). Proxy a -> Foo`.
+    
+* Existentially quantified type variables with higher-rank kinds, 
+  such as in `data Foo where MkFoo :: forall (f :: forall k. k -> Type). k Int -> k Maybe -> Foo`.
+
+### Things that kind-generics cannot handle, but can "fail gracefully"
+
+  Here, "fail gracefully" means that GHC can derive a `GenericK`
+instance for a data type applied to all of its arguments, but it will
+refrain from deriving instances for partial applications of the data
+type at a certain point):
+
+* Any data type with a kind that uses visible dependent quantification, 
+  such as in `data Foo :: forall k -> k -> Type`.
+
+* Any data type with a kind that uses nested foralls (e.g., `data Foo :: forall a. a -> forall b. b -> Type`) or is otherwise 
+  higher-rank (e.g., `data Foo :: (forall a. a -> a) -> Type`).
+   
+* Field types that feature a type family applied to a universally quantified type variable, such as in the following example:
+```haskell
+type family F a
+
+data Foo a where
+  MkFoo :: a -> F a -> Type
+```
+
+     
+* Existentially quantified type variables whose kinds mention universally 
+  quantified type variables, such as in 
+  `data Foo a where MkFoo :: forall a (ex :: a). Proxy ex -> Foo`.
+
+* Certain forms of data family instances cannot be represented. For example, 
+  consider this data instance:
+```haskell
+data family D1 a
+data instance D1 (Maybe a) = MkD1 a
+```
+ 
+  GHC would be able to derive a `GenericK (D1 (Maybe a))` instance, but not a `GenericK D1` instance. Similarly, in this data instance:
+
+```haskell
+data family D2 a b
+data instance D2 a a = MkD2 a
+```
+
+    GHC would be able to derive a `GenericK (D2 a a)` instance, but not a `GenericK (D2 a)` or `GenericK D2` instance.
 
 ## Costs and Drawbacks
 
