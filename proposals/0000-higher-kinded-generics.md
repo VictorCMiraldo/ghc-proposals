@@ -170,30 +170,30 @@ Attempting to derive GenericK for any data types with these properties will resu
 
 * Field types that feature a type family applied to an existentially quantified or 
   rank-n type variable, as in the following examples:
-```haskell
-type family F a
 
-data T1 where
-  MkT1 :: a -> F a -> T1
+ ```haskell
+ type family F a
 
-data T2 = MkT2 (forall a. a -> F a)
-```
+ data T1 where
+   MkT1 :: a -> F a -> T1
 
+ data T2 = MkT2 (forall a. a -> F a)
+ ```
 
-    This is an artifact of the way kind-generics decomposes all
-    applications of types in representation types. Because type
-    families must be saturated with a certain number of arguments in
-    order to be a well formed type, decomposing type family
-    applications is generally not possible. Implementing [this GHC](https://github.com/ghc-proposals/ghc-proposals/pull/242)
-    proposal may make it possible to lift this restriction.
+  This is an artifact of the way kind-generics decomposes all
+  applications of types in representation types. Because type
+  families must be saturated with a certain number of arguments in
+  order to be a well formed type, decomposing type family
+  applications is generally not possible. Implementing [this GHC](https://github.com/ghc-proposals/ghc-proposals/pull/242)
+  proposal may make it possible to lift this restriction.
     
 * Constructors that contain quantified constraints, such as in data
-    Foo where `MkFoo :: (forall a. C a) => Foo`.
+ Foo where `MkFoo :: (forall a. C a) => Foo`.
 
-    This ultimately comes down to technical limitations of GHC itself, as various 
-    bugs (such as [this one](https://gitlab.haskell.org/ghc/ghc/issues/16365) 
-    and [this one](https://gitlab.haskell.org/ghc/ghc/issues/17333)) make 
-    it impractical to represent quantified constraints.
+ This ultimately comes down to technical limitations of GHC itself, as various 
+ bugs (such as [this one](https://gitlab.haskell.org/ghc/ghc/issues/16365) 
+ and [this one](https://gitlab.haskell.org/ghc/ghc/issues/17333)) make 
+ it impractical to represent quantified constraints.
     
 * Existentially quantified type variables whose kinds mention other 
   existentially quantified type variables, such as in 
@@ -216,12 +216,12 @@ type at a certain point):
   higher-rank (e.g., `data Foo :: (forall a. a -> a) -> Type`).
    
 * Field types that feature a type family applied to a universally quantified type variable, such as in the following example:
-```haskell
-type family F a
-
-data Foo a where
-  MkFoo :: a -> F a -> Type
-```
+ ```haskell
+ type family F a
+ 
+ data Foo a where
+   MkFoo :: a -> F a -> Type
+ ```
 
      
 * Existentially quantified type variables whose kinds mention universally 
@@ -230,19 +230,19 @@ data Foo a where
 
 * Certain forms of data family instances cannot be represented. For example, 
   consider this data instance:
-```haskell
-data family D1 a
-data instance D1 (Maybe a) = MkD1 a
-```
+ ```haskell
+ data family D1 a
+ data instance D1 (Maybe a) = MkD1 a
+ ```
  
-  GHC would be able to derive a `GenericK (D1 (Maybe a))` instance, but not a `GenericK D1` instance. Similarly, in this data instance:
+ GHC would be able to derive a `GenericK (D1 (Maybe a))` instance, but not a `GenericK D1` instance. Similarly, in this data instance:
 
-```haskell
-data family D2 a b
-data instance D2 a a = MkD2 a
-```
+ ```haskell
+ data family D2 a b
+ data instance D2 a a = MkD2 a
+ ```
 
-    GHC would be able to derive a `GenericK (D2 a a)` instance, but not a `GenericK (D2 a)` or `GenericK D2` instance.
+   GHC would be able to derive a `GenericK (D2 a a)` instance, but not a `GenericK (D2 a)` or `GenericK D2` instance.
 
 ## Costs and Drawbacks
 
